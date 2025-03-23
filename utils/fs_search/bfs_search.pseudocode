@@ -1,0 +1,111 @@
+CLASS BfsNode
+   ATTRIBUTE data OF TYPE String
+   ATTRIBUTE parent OF TYPE BfsNode OR NULL
+   ATTRIBUTE children OF TYPE DynamicArray<BfsNode>
+
+   METHOD Constructor(
+         data OF TYPE String,
+         parent OF TYPE BfsNode DEFAULTS TO NULL)
+      self.data <= data
+      self.parent <= parent
+   ENDMETHOD
+
+   METHOD getFullPath(): String
+      traverse from this node upwards & create the full path
+   ENDMETHOD
+
+   METHOD hasChildren(): Boolean
+      IF this.children IS NOT EMPTY THEN
+         RETURN TRUE
+      ELSE
+         RETURN FALSE
+      ENDIF
+   ENDMETHOD
+
+   METHOD addChild(child OF TYPE BfsNode): VOID
+      ADD child TO this.children
+   ENDMETHOD
+
+   METHOD addChild(child OF TYPE BfsNode): VOID
+      ADD child TO this.children
+   ENDMETHOD
+
+   METHOD deleteChild(child OF TYPE BfsNode): VOID
+      IF child IN this.children THEN
+         REMOVE child FROM this.children
+      ELSE
+         RAISE AN ERROR
+      ENDIF
+   ENDMETHOD
+ENDCLASS
+
+
+CLASS BfsTree
+   ATTRIBUTE root OF TYPE BfsNode OR NULL DEFAULTS TO NULL
+   ATTRIBUTE search OF TYPE String DEFAULTS TO AN EMPTY STRING
+   ATTRIBUTE matchCase OF TYPE Boolean DEFAULTS TO FALSE
+   ATTRIBUTE matchWhole OF TYPE Boolean DEFAULTS TO FALSE
+   
+   METHOD Constructor()
+      NOOP
+   ENDMETHOD
+
+   METHOD match(text OF TYPE String): Boolean
+      RETURN TRUE IF text IS A CANDIDATE OF search ACCORDING TO
+         matchCase AND matchWhole CRITERIA ELSE FALSE
+   ENDMETHOD
+
+   METHOD searchNode(node OF TYPE BfsNode): VOID
+      // Getting the full path of the node...
+      fullpath <= node.getFullPath()
+      // Checking node contents in the file system...
+      FOR EACH file system item IN fullpath DO:
+         IF item IS A FILE THEN
+            IF CALL this.match WITH item, this.search, this.matchCase,
+                  this.matchWhole THEN
+               INFORM THE CLIENT CODE OF item
+            ENDIF
+         ELSE IF item IS A FOLDER THEN
+            CALL node.addChild WITH item
+         ENDIF
+      ENDFOR
+   ENDMETHOD
+
+   METHOD searchBfsRecursive(node OF TYPE BfsNode): VOID
+      IF CALL node.hasChildren() THEN
+         FOR EACH child IN node.children DO:
+            CALL this.searchBfsRecursive WITH child
+            IF NOT child.hasChildren() THEN
+               CALL node.deleteChild WITH child
+            ENDIF
+         ENDFOR
+      ELSE
+         CALL this.searchNode WITH node
+      ENDIF
+   ENDMETHOD
+
+   METHOD searchBfs(
+         rootDir OF TYPE String,
+         search OF TYPE String,
+         matchCase OF TYPE Boolean DEFAULTS TO FALSE,
+         matchWhole OF TYPE Boolean DEFAULTS TO FALSE,
+         ): VOID
+      // Ensuring thread-safety...
+      IF ANOTHER THREAD IS RUNNING this OBJECT THEN
+         RAISE AN ERROR
+      ENDIF
+      // Saving arguments...
+      self.root <= CREATE BfsNode WITH rootDir
+      self.search <= search
+      self.matchCase <= matchCase
+      self.matchWhole <= matchWhole
+      // Searching level 0...
+      CALL this.searchNode WITH this.root, this.search, this.matchCase,
+         this.matchWhole
+      // Searching next levels...
+      WHILE this.root.children IS NOT EMPTY DO:
+         CALL this.searchBfsRecursive WITH this.root, this.search,
+            this.matchCase, this.matchWhole
+      ENDWHILE
+   ENDMETHOD
+ENDCLASS
