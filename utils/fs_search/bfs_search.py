@@ -33,11 +33,13 @@ class SearchOptions(enum.IntFlag):
     """Represents the search options."""
     NONE = 0x00
     MATCH_CASE = 0x01
-    MATCH_WHOLE = 0x02        
+    MATCH_WHOLE = 0x02
+    FILES_INCLUDED = 0x04
+    DIRS_INCLUDED = 0x08
 
 
-class IBfsSearch(ABC):
-    """Interface for breadth-first search."""
+class ISearchable(ABC):
+    """Interface for searchable objects."""
 
     @abstractmethod
     def searchBfs(
@@ -114,7 +116,7 @@ class BfsNode:
         return f"<{className} data={self.data}>"
 
 
-class BfsTreeSearch(IBfsSearch):
+class BfsTreeSearch(ISearchable):
     """Represents a breadth-first search tree."""
 
     _root: BfsNode | None = None

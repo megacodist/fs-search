@@ -10,3 +10,6 @@
 
 # Ignoring Python cache folders...
 /**/__pycache__
+
+
+/megacodist
