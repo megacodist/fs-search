@@ -3,17 +3,31 @@
 #
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import NO, ttk
 from pathlib import Path
-
+import os
+import platform
+import subprocess
+import logging
+from typing import Callable
 
 class ResultsView(ttk.Frame):
     """
     A custom widget to display search results in a Treeview with scrollbars.
     """
 
-    def __init__(self, parent):
+    def __init__(
+            self,
+            parent,
+            on_item_double_click: Callable[[Path], None] | None = None,
+            ) -> None:
         super().__init__(parent)
+        self._mpIidPath: dict[str, Path] = {}
+        """
+        The mapping between items' ID and their path objects:
+        `iid -> Path`
+        """
+        self._onItemDoubleClicked = on_item_double_click
         self._initGui()
 
     def _initGui(self):
@@ -41,18 +55,22 @@ class ResultsView(ttk.Frame):
         self._treevw.grid(row=0, column=0, sticky="nsew")
         self._vsb.grid(row=0, column=1, sticky="ns")
         self._hsb.grid(row=1, column=0, sticky="ew")
+        # Bind double-click event
+        self._treevw.bind("<Double-1>", self._onDoubleClick)
 
     def clear(self):
         """Clears all items from the Treeview."""
         for item in self._treevw.get_children():
             self._treevw.delete(item)
+        self._mpIidPath.clear()
 
     def add(self, path: Path):
         """Adds a Path object to the Treeview."""
-        self._treevw.insert(
+        iid = self._treevw.insert(
             parent="",
             index="end",
-            values=(path.name, str(path.parent)),)
+            values=(path.name, str(path.parent)))
+        self._mpIidPath[iid] = path
 
     def setColumnsSize(
             self,
@@ -70,3 +88,10 @@ class ResultsView(ttk.Frame):
         itemColWidth = self._treevw.column("Item")["width"] # type: ignore
         pathColWidth = self._treevw.column("Path")["width"] # type: ignore
         return itemColWidth, pathColWidth
+
+    def _onDoubleClick(self, event: tk.Event) -> None:
+        """Handles the double-click event on a Treeview item."""
+        iid = self._treevw.identify_row(event.y)
+        if iid and self._onItemDoubleClicked:
+            self._onItemDoubleClicked(self._mpIidPath[iid])
+

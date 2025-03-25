@@ -9,17 +9,22 @@ from tkinter import ttk
 from pathlib import Path
 from queue import Queue, Empty
 import threading
+import platform
+import subprocess
 
-from utils.fs_search.bfs_search import (
-    SearchOptions, SearchLocation, SearchMatch, BfsTreeSearch)
+from megacodist.fs import (
+    FsSearchOptions, FsSearchLocation, FsSearchMatch, IFsSearchable)
+
 from utils.settings import FsAppSettings
 from widgets.results_view import ResultsView
-from widgets.search_box import SearchBox, SearchOptions, SearchTerms
-
+from widgets.search_box import SearchBox, SearchTerms
 
 
 class SearchWin(tk.Tk):
-    def __init__(self, settings: FsAppSettings):
+    def __init__(
+            self,
+            settings: FsAppSettings,
+            searchers: dict[str, type[IFsSearchable]]):
         super().__init__()
         # Setting window properties...
         self.title("Megacodist FS Search")
@@ -29,8 +34,14 @@ class SearchWin(tk.Tk):
         # Declaring variables...
         self._settings = settings
         """The application settings object."""
-        self._q: Queue[SearchLocation | SearchMatch]
-        self._bfs = BfsTreeSearch()
+        self._searchers = searchers
+        """
+        The mapping between FS searcher names and their class objects:
+        `FS searcher names => FS searcher types`
+        """
+        self._searcher: IFsSearchable | None = None
+        """The FS searcher which is currently using."""
+        self._q: Queue[FsSearchLocation | FsSearchMatch]
         """The BFS search object."""
         self._searchThread: threading.Thread | None = None
         self._INTVL_AFTER = 150
@@ -54,6 +65,7 @@ class SearchWin(tk.Tk):
         # Search Box
         self._searchbx = SearchBox(
             self._pwin,
+            list(self._searchers.keys()),
             self._startSearch,
             self._stopSearch)
         self._searchbx.pack(fill=tk.BOTH, expand=True)
@@ -65,7 +77,7 @@ class SearchWin(tk.Tk):
         self._frm_right = ttk.Frame(self._pwin)
         self._pwin.add(self._frm_right, weight=3)  # Allow resizing
         # Results View
-        self._resvw = ResultsView(self._frm_middle)
+        self._resvw = ResultsView(self._frm_middle, self._revealInExplorer)
         self._resvw.setColumnsSize(
             self._settings.item_col_width,
             self._settings.path_col_width)
@@ -126,17 +138,17 @@ class SearchWin(tk.Tk):
     def _clearResultsVw(self) -> None:
         self._resvw.clear()
 
-    def _termsToOptions(self, terms: SearchTerms) -> SearchOptions:
+    def _termsToOptions(self, terms: SearchTerms) -> FsSearchOptions:
         """Converts the search terms to a search options object."""
-        options = SearchOptions.NONE
+        options = FsSearchOptions.NONE
         if terms.matchCase:
-            options |= SearchOptions.MATCH_CASE
+            options |= FsSearchOptions.MATCH_CASE
         if terms.matchWhole:
-            options |= SearchOptions.MATCH_WHOLE
+            options |= FsSearchOptions.MATCH_WHOLE
         if terms.includeFiles:
-            options |= SearchOptions.FILES_INCLUDED
+            options |= FsSearchOptions.FILES_INCLUDED
         if terms.includeDirs:
-            options |= SearchOptions.DIRS_INCLUDED
+            options |= FsSearchOptions.DIRS_INCLUDED
         return options
 
     def _startSearch(self, terms: SearchTerms) -> None:
@@ -154,7 +166,8 @@ class SearchWin(tk.Tk):
         self._searchbx.updateGui_searching()
         self._lbl_status.config(text="Searching...")
         # Starting the search thread...
-        self._q = Queue[SearchLocation | SearchMatch]()
+        self._q = Queue[FsSearchLocation | FsSearchMatch]()
+        self._searcher = self._searchers[terms.algorithm]()
         self._searchThread = threading.Thread(
             target=self._runSearch,
             args=(
@@ -170,7 +183,7 @@ class SearchWin(tk.Tk):
             self._pollSearching)
     
     def _stopSearch(self) -> None:
-        self._bfs.cancel()
+        self._searcher.stopSearch() # type: ignore
         self._searchbx.updateGui_stopping()
         self._lbl_status.config(text="Stopping...")
         if self._afterId_search:
@@ -184,11 +197,11 @@ class SearchWin(tk.Tk):
             self,
             root_dir: str,
             search: str,
-            q: Queue[SearchLocation | SearchMatch],
-            options: SearchOptions,
+            q: Queue[FsSearchLocation | FsSearchMatch],
+            options: FsSearchOptions,
             ) -> None:
         try:
-            self._bfs.searchBfs(root_dir, search, q, options)
+            self._searcher.search(root_dir, search, q, options) # type: ignore
         except RuntimeError as err:
             print(err)
 
@@ -197,10 +210,10 @@ class SearchWin(tk.Tk):
         try:
             while True:
                 item = self._q.get_nowait()
-                if isinstance(item, SearchLocation):
+                if isinstance(item, FsSearchLocation):
                     self._lbl_status.config(text=f"Searching in: {item.path}")
                     print(f'<{len(item.path.parents)}> {item.path}')
-                elif isinstance(item, SearchMatch):
+                elif isinstance(item, FsSearchMatch):
                     self._resvw.add(item.path)
         except Empty:
             pass
@@ -210,6 +223,7 @@ class SearchWin(tk.Tk):
             self._lbl_status.config(text="Ready")
             self._afterId_search = None
             self._searchThread = None
+            self._searcher = None
             return
         # Scheduling next poll...
         self._afterId_search = self.after(
@@ -228,3 +242,26 @@ class SearchWin(tk.Tk):
         self._afterId_stop = self.after(
             self._INTVL_AFTER,
             self._pollStopping,)
+
+    def _revealInExplorer(self, path: Path):
+        """Opens the given path in the system's file explorer."""
+        if platform.system() == "Windows":
+            # Windows
+            if path.is_file():
+                subprocess.Popen(f'explorer /select,"{path}"')
+            else:
+                subprocess.Popen(f'explorer "{path}"')
+        elif platform.system() == "Darwin":
+            # macOS
+            if path.is_file():
+                subprocess.Popen(["open", "-R", str(path)])
+            else:
+                subprocess.Popen(["open", str(path)])
+        elif platform.system() == "Linux":
+            # Linux
+            if path.is_file():
+                subprocess.Popen(["xdg-open", str(path.parent)])
+            else:
+                subprocess.Popen(["xdg-open", str(path)])
+        else:
+            logging.warning(f"Unsupported operating system: {platform.system()}")

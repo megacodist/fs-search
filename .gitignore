@@ -1,15 +1,15 @@
 # Ignoring Python virtual environment files & folders...
-/Include
-/Lib
-/Scripts
+/Include/
+/Lib/
+/Scripts/
 /pyvenv.cfg
 
 # Ignoring tools files & folders...
-/.qodo
-.qodo
+/.qodo/
 
 # Ignoring Python cache folders...
-/**/__pycache__
+/**/__pycache__/
 
 
-/megacodist
+/megacodist/
+.qodo

@@ -6,6 +6,7 @@ from pathlib import Path
 from megacodist.console import Spinner, SpinnerStyle
 from megacodist.exceptions import InvalidFileContentError
 
+
 spinner = Spinner(SpinnerStyle.BLOCK)
 """The spinner object to ensute the user of background tasks on the
 terminal.
@@ -17,12 +18,16 @@ _APP_DIR = Path(__file__).resolve().parent
 
 def main() -> None:
     global spinner
+    # Loading FS searchers...
+    from utils.fs_search import loadFsSearchers
+    searchers = loadFsSearchers(Path('megacodist/fs'))
+    print(searchers)
     # Loading application settings...
     #spinner.start(_('LOADING_SETTINGS'))
     from utils.settings import FsAppSettings
     settings = FsAppSettings()
     try:
-        settings.Load(_APP_DIR / 'config.bin')
+        settings.load(_APP_DIR / 'config.bin')
     except InvalidFileContentError:
         #spinner.stop(_('BAD_SETTINGS_FILE'))
         pass
@@ -32,10 +37,10 @@ def main() -> None:
     # Running the app...
     from widgets.search_win import SearchWin
     try:
-        app = SearchWin(settings)
+        app = SearchWin(settings, searchers)
         app.mainloop()
     finally:
-        settings.Save()
+        settings.save()
 
 
 if __name__ == "__main__":

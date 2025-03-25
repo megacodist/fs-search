@@ -7,8 +7,6 @@ from tkinter import ttk
 from tkinter.filedialog import askdirectory
 from typing import Callable
 
-from utils.fs_search.bfs_search import SearchOptions
-
 
 class SearchTerms:
     """Represents the search terms."""
@@ -36,6 +34,7 @@ class SearchBox(ttk.Frame):
     def __init__(
             self,
             parent,
+            algorithms: list[str],
             on_search: Callable[[SearchTerms], None],
             on_stop: Callable[[], None],
             ) -> None:
@@ -52,6 +51,8 @@ class SearchBox(ttk.Frame):
         self._svar_algorithm = tk.StringVar(value="BFS")
         # Creating GUI...
         self._initGui()
+        self._cmbx_algorithm.config(values=algorithms)
+        self._cmbx_algorithm.current(0)
         # Setting event handlers...
         self._btn_browseDir.config(command=self._selectFolder)
         self._btn_searchStop.config(command=self._onSearchStopClicked)
@@ -185,10 +186,8 @@ class SearchBox(ttk.Frame):
         # Algorithm Combobox
         self._cmbx_algorithm = ttk.Combobox(
             self,
-            values=["BFS", "DFS"],
             state="readonly",
             textvariable=self._svar_algorithm,)
-        self._cmbx_algorithm.current(0)  # Default to BFS
         self._cmbx_algorithm.grid(
             row=9,
             column=0,
@@ -229,11 +228,14 @@ class SearchBox(ttk.Frame):
             case "Stop":
                 self._onStop()
 
-    def get_folder(self) -> str:
+    def getFolder(self) -> str:
         return self._svar_folder.get()
 
-    def get_search_text(self) -> str:
+    def getSearchText(self) -> str:
         return self._svar_search.get()
+    
+    def getAlgorithm(self) -> str:
+        return self._svar_algorithm.get()
 
     def updateGui_ready(self) -> None:
         """Updates the GUI to show the app is ready to perform BFS search."""
@@ -244,7 +246,7 @@ class SearchBox(ttk.Frame):
         self._chbx_matchWhole.config(state=tk.NORMAL)
         self._chbx_includeFiles.config(state=tk.NORMAL)
         self._chbx_includeFolders.config(state=tk.NORMAL)
-        self._cmbx_algorithm.config(state=tk.NORMAL)
+        self._cmbx_algorithm.config(state="readonly")
 
     def updateGui_searching(self) -> None:
         """Updates the GUI to show the app is performing BFS search."""
